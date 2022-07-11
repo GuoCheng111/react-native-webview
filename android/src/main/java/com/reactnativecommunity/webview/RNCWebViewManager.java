@@ -217,19 +217,10 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
         }
 
         JSONObject msg = new JSONObject();
-
         msg.put("type", "setHeaderRightBtn");
         msg.put("data", data);
 
         webView.onMessage(msg.toJSONString());
-      }
-    });
-	
-	
-	webView.registerHandler("setStatusBarType", new BridgeHandler() {
-      @Override
-      public void handler(String data, CallBackFunction function) {
-        Log.d(TAG, "handler = setStatusBarType, data form web =" + data);
       }
     });
 
@@ -245,7 +236,6 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
         webView.onMessage(msg.toJSONString());
       }
     });
-	
     //end
 
     // Fixes broken full-screen modals/galleries due to body height being 0.
@@ -786,6 +776,16 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
         @Override
         public Bitmap getDefaultVideoPoster() {
           return Bitmap.createBitmap(50, 50, Bitmap.Config.ARGB_8888);
+        }
+
+        @Override
+        public void onReceivedTitle(WebView view, String title) {
+          Log.i(TAG, "onReceivedTitle: " + title);
+
+          JSONObject msg = new JSONObject();
+          msg.put("type", "changeTitle");
+          msg.put("data", title);
+          ((RNCWebView) view).onMessage(msg.toJSONString());
         }
       };
       webView.setWebChromeClient(mWebChromeClient);

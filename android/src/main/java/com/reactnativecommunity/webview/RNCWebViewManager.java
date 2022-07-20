@@ -236,6 +236,19 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
         webView.onMessage(msg.toJSONString());
       }
     });
+	
+	webView.registerHandler("closeWebView", new BridgeHandler() {
+      @Override
+      public void handler(String data, CallBackFunction function) {
+        Log.d(TAG, "handler = closeWebView, data form web =" + data);
+
+        JSONObject msg = new JSONObject();
+        msg.put("type", "closeWebView");
+        msg.put("data", data);
+
+        webView.onMessage(msg.toJSONString());
+      }
+    });
     //end
 
     // Fixes broken full-screen modals/galleries due to body height being 0.

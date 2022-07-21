@@ -10,7 +10,7 @@
 #import <React/RCTAutoInsetsProtocol.h>
 #import "RNCWKProcessPoolManager.h"
 #import <UIKit/UIKit.h>
-
+#import "WebViewJavascriptBridge.h"
 #import "objc/runtime.h"
 
 static NSTimer *keyboardTimer;
@@ -51,6 +51,7 @@ static NSDictionary* customCertificatesForHost;
 @property (nonatomic, copy) RCTDirectEventBlock onScroll;
 @property (nonatomic, copy) RCTDirectEventBlock onContentProcessDidTerminate;
 @property (nonatomic, copy) WKWebView *webView;
+@property (nonatomic, copy) WebViewJavascriptBridge* bridge;
 @end
 
 @implementation RNCWebView
@@ -296,11 +297,14 @@ static NSDictionary* customCertificatesForHost;
     _webView.scrollView.directionalLockEnabled = _directionalLockEnabled;
     _webView.allowsLinkPreview = _allowsLinkPreview;
     [_webView addObserver:self forKeyPath:@"estimatedProgress" options:NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew context:nil];
+    [_webView addObserver:self forKeyPath:@"title" options:NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew context:nil];
     _webView.allowsBackForwardNavigationGestures = _allowsBackForwardNavigationGestures;
 
     if (_userAgent) {
       _webView.customUserAgent = _userAgent;
     }
+      
+//    _webView.customUserAgent = [NSString stringWithFormat:@"%@ CCDT", _webView.customUserAgent];
 #if defined(__IPHONE_OS_VERSION_MAX_ALLOWED) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 110000 /* __IPHONE_11_0 */
     if ([_webView.scrollView respondsToSelector:@selector(setContentInsetAdjustmentBehavior:)]) {
       _webView.scrollView.contentInsetAdjustmentBehavior = _savedContentInsetAdjustmentBehavior;
@@ -308,10 +312,79 @@ static NSDictionary* customCertificatesForHost;
 #endif
 
     [self addSubview:_webView];
+      
+    //Add BY liangcz start
+    if (@available(iOS 11.0, *)) {
+        if(_webView){
+            WKHTTPCookieStore *httpCookieStore = _webView.configuration.websiteDataStore.httpCookieStore;
+            [httpCookieStore getAllCookies:^(NSArray* cookies) {
+                  NSLog(@"zongge cookies =%@",cookies);
+            }];
+        }
+     } else {
+          // Fallback on earlier versions
+     }
+    if(_webView!=nil){
+        _bridge = [WebViewJavascriptBridge bridgeForWebView:_webView];
+        [_bridge setWebViewDelegate:self];
+        [self registBridgeHandler];
+    }
+    //Add By liangcz end
     [self setHideKeyboardAccessoryView: _savedHideKeyboardAccessoryView];
     [self setKeyboardDisplayRequiresUserAction: _savedKeyboardDisplayRequiresUserAction];
     [self visitSource];
   }
+}
+
+- (void)registBridgeHandler{
+    __weak typeof(self) weakSelf = self;
+    [_bridge registerHandler:@"openWebView" handler:^(id data, WVJBResponseCallback responseCallback) {
+        NSMutableDictionary *muDictionary = [NSMutableDictionary dictionaryWithDictionary:data];
+        BOOL hiddenCloseFork = [muDictionary objectForKey:@"hiddenCloseFork"];
+        NSNumber *type = [muDictionary objectForKey:@"type"];
+        [muDictionary removeObjectForKey:@"hiddenCloseFork"];
+        [muDictionary removeObjectForKey:@"type"];
+        [muDictionary setValue:hiddenCloseFork?@"true":@"false" forKey:@"hiddenCloseFork"];
+        [muDictionary setValue:[NSString stringWithFormat:@"%d", [type intValue] ] forKey:@"type"];
+        NSDictionary *dicMassage = @{@"type":@"openWebView", @"data":RCTJSONStringify(muDictionary, NULL)};
+        NSString *massge = RCTJSONStringify(dicMassage, NULL);
+        NSLog(@"openWebView data=%@, massage=%@", data, massge);
+        if (weakSelf.onMessage) {
+          NSMutableDictionary<NSString *, id> *event = [self baseEvent];
+          [event addEntriesFromDictionary: @{@"data": massge}];
+          weakSelf.onMessage(event);
+        }
+    }];
+    
+    [_bridge registerHandler:@"closeWebView" handler:^(id data, WVJBResponseCallback responseCallback) {
+        NSLog(@"closeWebView data=%@",data);
+        NSDictionary *dicMassage = @{@"type":@"closeWebView", @"data":RCTJSONStringify(data, NULL)};
+        NSString *massge = RCTJSONStringify(dicMassage, NULL);
+        NSLog(@"closeWebView data=%@, massage=%@", data, massge);
+        if (weakSelf.onMessage) {
+          NSMutableDictionary<NSString *, id> *event = [self baseEvent];
+          [event addEntriesFromDictionary: @{@"data": massge}];
+          weakSelf.onMessage(event);
+        }
+    }];
+    [_bridge registerHandler:@"setHeaderRightBtn" handler:^(id data, WVJBResponseCallback responseCallback) {
+        NSLog(@"setHeaderRightBtn data=%@", data);
+        NSDictionary *dicMassage = @{@"type":@"setHeaderRightBtn", @"data":RCTJSONStringify(data, NULL)};
+        NSString *massge = RCTJSONStringify(dicMassage, NULL);
+        NSLog(@"setHeaderRightBtn data=%@, massage=%@", data, massge);
+        if (weakSelf.onMessage) {
+          NSMutableDictionary<NSString *, id> *event = [self baseEvent];
+          [event addEntriesFromDictionary: @{@"data": massge}];
+          weakSelf.onMessage(event);
+        }
+    }];
+}
+
+- (NSString *)dictionaryToString:(NSDictionary *)dicSource{
+    NSError * err = [[NSError alloc]init];
+    NSData * data = [NSJSONSerialization dataWithJSONObject:dicSource options:NSJSONWritingPrettyPrinted error:&err];
+    NSString *result = [[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
+    return result;
 }
 
 // Update webview property when the component prop changes.
@@ -326,7 +399,10 @@ static NSDictionary* customCertificatesForHost;
     if (_webView) {
         [_webView.configuration.userContentController removeScriptMessageHandlerForName:MessageHandlerName];
         [_webView removeObserver:self forKeyPath:@"estimatedProgress"];
+        [_webView removeObserver:self forKeyPath:@"title"];
         [_webView removeFromSuperview];
+        _bridge.webViewDelegate = nil;
+        _bridge = nil;
         _webView.scrollView.delegate = nil;
         _webView = nil;
     }
@@ -388,6 +464,13 @@ static NSDictionary* customCertificatesForHost;
              NSMutableDictionary<NSString *, id> *event = [self baseEvent];
             [event addEntriesFromDictionary:@{@"progress":[NSNumber numberWithDouble:self.webView.estimatedProgress]}];
             _onLoadingProgress(event);
+        }
+    }else if ([keyPath isEqual:@"title"] && object == self.webView) {//Add By liangcz
+        if(_onMessage){
+            NSMutableDictionary<NSString *, id> *event = [self baseEvent];
+            NSString *massage = RCTJSONStringify(@{@"type":@"changeTitle",@"data":_webView.title}, NULL);
+            [event addEntriesFromDictionary: @{@"data":massage}];
+            _onMessage(event);
         }
     }else{
         [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
@@ -685,12 +768,22 @@ static NSDictionary* customCertificatesForHost;
 
 - (void)postMessage:(NSString *)message
 {
-  NSDictionary *eventInitDict = @{@"data": message};
-  NSString *source = [NSString
-    stringWithFormat:@"window.dispatchEvent(new MessageEvent('message', %@));",
-    RCTJSONStringify(eventInitDict, NULL)
-  ];
-  [self injectJavaScript: source];
+    NSLog(@"postMessage message=%@",message);
+   if(message!=nil && [message containsString:@"\"type\":\"JSBridge\""]){
+       NSData *jsonData = [message dataUsingEncoding:NSUTF8StringEncoding];
+       NSError *error;
+       NSDictionary *mDictionary = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error];
+       NSString *callHandler = [mDictionary objectForKey:@"callHandler"];
+       [self.bridge callHandler:callHandler data:nil responseCallback:^(id responseData) {
+           NSLog(@"callRightEvent responseData=%@",responseData);
+       }];
+   }else{
+       NSDictionary *eventInitDict = @{@"data": message};
+       NSString *source = [NSString stringWithFormat:@"window.dispatchEvent(new MessageEvent('message', %@));",
+         RCTJSONStringify(eventInitDict, NULL)
+       ];
+       [self injectJavaScript: source];
+   }
 }
 
 - (void)layoutSubviews

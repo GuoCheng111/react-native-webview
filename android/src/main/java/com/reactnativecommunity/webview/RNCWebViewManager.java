@@ -880,12 +880,12 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
         reactWebView.flushMessageQueue();
         return true;
       } else {
-        dispatchEvent(
-          view,
-          new TopShouldStartLoadWithRequestEvent(
-            view.getId(),
-            createWebViewEvent(view, url)));
-        return true;
+        //dispatchEvent(
+        //  view,
+        //  new TopShouldStartLoadWithRequestEvent(
+        //    view.getId(),
+        //    createWebViewEvent(view, url)));
+        return false;
       }
     }
 

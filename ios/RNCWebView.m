@@ -10,7 +10,7 @@
 #import <React/RCTAutoInsetsProtocol.h>
 #import "RNCWKProcessPoolManager.h"
 #import <UIKit/UIKit.h>
-#import "WebViewJavascriptBridge.h"
+#import "WKWebViewJavascriptBridge.h"
 #import "objc/runtime.h"
 
 static NSTimer *keyboardTimer;
@@ -51,7 +51,7 @@ static NSDictionary* customCertificatesForHost;
 @property (nonatomic, copy) RCTDirectEventBlock onScroll;
 @property (nonatomic, copy) RCTDirectEventBlock onContentProcessDidTerminate;
 @property (nonatomic, copy) WKWebView *webView;
-@property (nonatomic, copy) WebViewJavascriptBridge* bridge;
+@property (nonatomic, copy) WKWebViewJavascriptBridge* bridge;
 @end
 
 @implementation RNCWebView
@@ -325,7 +325,7 @@ static NSDictionary* customCertificatesForHost;
           // Fallback on earlier versions
      }
     if(_webView!=nil){
-        _bridge = [WebViewJavascriptBridge bridgeForWebView:_webView];
+        _bridge = [WKWebViewJavascriptBridge bridgeForWebView:_webView];
         [_bridge setWebViewDelegate:self];
         [self registBridgeHandler];
     }
